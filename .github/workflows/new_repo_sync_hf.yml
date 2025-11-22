@@ -1,8 +1,9 @@
-name: Sync to Hugging Face hub
+name: Sync to Hugging Face Space
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -10,20 +11,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
+
+      - name: Install git-lfs
+        run: |
+          git lfs install
 
       - name: Install git-xet
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
           git xet install
-          git lfs install
-          git-xet --version
+
+      - name: Set git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Push to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push https://AI-Solutions-KK:${HF_TOKEN}@huggingface.co/spaces/AI-Solutions-KK/face_recognition main
+          HF_URL="https://AI-Solutions-KK:${HF_TOKEN}@huggingface.co/spaces/AI-Solutions-KK/face_recognition"
+
+          # Add or update remote pointing to the Space
+          git remote add space "$HF_URL" 2>/dev/null || git remote set-url space "$HF_URL"
+
+          # If Space already has a main branch, rebase on top of it
+          if git ls-remote --heads space main | grep main > /dev/null 2>&1; then
+            git pull --rebase space main
+          fi
+
+          # Push local main (HEAD) to Space main
+          git push space HEAD:main
